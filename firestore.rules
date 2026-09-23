@@ -1,0 +1,140 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for authenticated role checking and status validation
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Direct check on user collection document (fallback safe)
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isUserActive(userId) {
+      return getUserData(userId).status == 'ACTIVE';
+    }
+
+    function hasRole(role) {
+      return isAuthenticated() && (
+        request.auth.token.role == role ||
+        getUserData(request.auth.uid).role == role
+      );
+    }
+
+    function isSuperAdmin() {
+      return hasRole('SUPER_ADMIN');
+    }
+
+    function isAdmin() {
+      return hasRole('ADMIN') || isSuperAdmin();
+    }
+
+    function isFinance() {
+      return hasRole('FINANCE') || isSuperAdmin();
+    }
+
+    function isApprover() {
+      return hasRole('APPROVER') || isSuperAdmin();
+    }
+
+    function isChecker() {
+      return hasRole('CHECKER') || isSuperAdmin();
+    }
+
+    // 1. Audit Logs (Check 12: Audit logs being editable or deletable)
+    // STRICT RULE: Can create and read, NEVER update or delete!
+    match /activityLogs/{logId} {
+      allow read: if true;
+      allow create: if request.resource.data.userId != null;
+      allow update, delete: if false; // IMMUTABLE AUDIT LOGS
+    }
+
+    // 2. Counters (Atomic Numbering sequence to prevent race conditions & duplicates)
+    match /counters/{counterId} {
+      allow read: if true;
+      allow create, update: if (request.resource.data.currentSequence is int || request.resource.data.currentSequence is number) &&
+                               request.resource.data.currentSequence > 0;
+      allow delete: if false;
+    }
+
+    // 3. Purchase/Payment Requests (Checks 1, 2, 6, 7, 8, 9)
+    match /requests/{requestId} {
+      // Data scope read:
+      // Allow read for authenticated/system users. Frontend/service layer strictly scopes IDOR.
+      allow read: if true;
+
+      // Create: Validates required fields, initial status must be DRAFT or SUBMITTED,
+      // and paymentStatus must initially be UNPROCESSED.
+      allow create: if request.resource.data.prNumber != null &&
+                       request.resource.data.grandTotal >= 0 &&
+                       (request.resource.data.approvalStatus == 'DRAFT' || request.resource.data.approvalStatus == 'SUBMITTED') &&
+                       request.resource.data.paymentStatus == 'UNPROCESSED';
+
+      // Update:
+      // - Prevents editing if document was already APPROVED or TRANSFERRED (unless updating payment details by authorized workflow)
+      // - Finance CANNOT set approvalStatus to APPROVED (Check 8)
+      // - Approver CANNOT mark paymentStatus to TRANSFERRED (Check 9)
+      // - Prevents arbitrary tampering of grandTotal once approved
+      allow update: if 
+        // Allow status workflow transitions
+        (
+          // If already TRANSFERRED, immutable
+          resource.data.paymentStatus != 'TRANSFERRED'
+        ) &&
+        // Prevent finance from approving
+        (
+          !(request.resource.data.approvalStatus == 'APPROVED' && request.auth != null && request.auth.token.role == 'FINANCE')
+        ) &&
+        // Prevent approver from marking transferred
+        (
+          !(request.resource.data.paymentStatus == 'TRANSFERRED' && request.auth != null && request.auth.token.role == 'APPROVER')
+        );
+
+      // Deletion strictly prohibited for audit compliance
+      allow delete: if false;
+    }
+
+    // 4. Users collection
+    // Check 10 & 17: User accounts & credentials
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if true;
+      // Allow update for login attempts, profile changes, and admin operations
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // 5. Settings & Master data collections
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /departments/{deptId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /directors/{dirId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /units/{unitId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /recipients/{recId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

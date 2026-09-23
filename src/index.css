@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --color-chile-rojo: #D06224;
+  --color-chile-rojo-hover: #B7521B;
+  --color-terracota: #AF431D;
+  --color-terracota-dark: #8B3518;
+  --color-olive: #8B8635;
+  --color-sunset: #E9C892;
+  --color-sunset-light: #F2E0C3;
+  --color-cream: #F7E7DE;
+  --color-espresso: #220D05;
+  --color-espresso-950: #140803;
+  --color-espresso-900: #1A0B05;
+  --color-espresso-850: #220F07;
+  --color-espresso-800: #2C140A;
+  --color-espresso-700: #3E1E10;
+  --color-espresso-600: #572C18;
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #140803;
+    color: #F7E7DE;
+  }
+
+  .font-mono, [data-tabular="true"] {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
